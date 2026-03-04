@@ -1,0 +1,202 @@
+
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NAS100 Trading Journal & Calculator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { background-color: #0f172a; color: white; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+        .card { background: #1e293b; border-radius: 16px; padding: 20px; border: 1px solid #334155; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); }
+        .input-field { width: 100%; padding: 12px; background: #0f172a; rounded-lg: 8px; border: 1px solid #475569; color: white; outline: none; }
+        .input-field:focus { border-color: #3b82f6; }
+        .hidden { display: none; }
+        /* Style spécial mobile */
+        @media (max-width: 768px) {
+            .main-content { padding: 10px; margin-bottom: 80px; }
+            .nav-bottom { position: fixed; bottom: 0; left: 0; right: 0; background: #1e293b; display: flex; justify-content: space-around; padding: 15px; border-top: 1px solid #334155; z-index: 40; }
+            .sidebar { display: none; }
+        }
+    </style>
+</head>
+<body class="pb-20 md:pb-0">
+
+    <div class="nav-bottom md:hidden">
+        <button onclick="showSection('dashboard')" class="text-blue-400 font-bold text-sm">📊 Stats</button>
+        <button onclick="showSection('journal')" class="text-slate-400 font-bold text-sm">📓 Journal</button>
+    </div>
+
+    <div class="hidden md:flex sidebar fixed left-0 top-0 bottom-0 w-64 bg-slate-800 p-6 flex-col border-r border-slate-700">
+        <h2 class="text-2xl font-black text-blue-500 mb-10 italic text-center">NAS100 PRO</h2>
+        <button onclick="showSection('dashboard')" class="w-full text-left p-3 hover:bg-slate-700 rounded-lg mb-2 font-bold transition">📊 Tableau de bord</button>
+        <button onclick="showSection('journal')" class="w-full text-left p-3 hover:bg-slate-700 rounded-lg mb-2 font-bold transition">📓 Journal des trades</button>
+        <div class="mt-auto">
+            <button onclick="clearData()" class="text-red-400 text-xs hover:underline">Effacer toutes les données</button>
+        </div>
+    </div>
+
+    <div class="md:ml-64 p-4 md:p-8">
+        
+        <div class="card mb-6 border-l-4 border-l-yellow-500 bg-slate-800/50">
+            <h3 class="text-lg font-bold text-yellow-500 mb-4 flex items-center gap-2">⚡ CALCULATEUR DE LOT NAS100</h3>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                    <label class="text-xs text-slate-400 uppercase font-bold">Risque voulu ($)</label>
+                    <input type="number" id="calc-risk" placeholder="Ex: 200" class="input-field text-lg font-bold text-yellow-400" oninput="calcLot()">
+                </div>
+                <div>
+                    <label class="text-xs text-slate-400 uppercase font-bold">Points de Stop Loss</label>
+                    <input type="number" id="calc-sl" placeholder="Ex: 50" class="input-field text-lg font-bold" oninput="calcLot()">
+                </div>
+                <div class="flex flex-col items-center justify-center bg-blue-600/20 rounded-xl border border-blue-500/30 p-3">
+                    <span class="text-[10px] text-blue-300 font-black uppercase">LOT À SAISIR</span>
+                    <span id="res-lot" class="text-4xl font-black">0.00</span>
+                </div>
+            </div>
+        </div>
+
+        <div id="section-dashboard">
+            <div class="flex justify-between items-center mb-6">
+                <h1 class="text-2xl font-bold">Ma Performance</h1>
+                <button onclick="toggleModal(true)" class="bg-blue-600 hover:bg-blue-500 px-5 py-2 rounded-full font-bold shadow-lg shadow-blue-900/40 text-sm">+ Nouveau Trade</button>
+            </div>
+
+            <div class="grid grid-cols-3 gap-3 mb-6">
+                <div class="card p-4 text-center"><p class="text-[10px] text-slate-400 uppercase">Profit</p><p id="total-profit" class="text-lg font-black">$0.00</p></div>
+                <div class="card p-4 text-center"><p class="text-[10px] text-slate-400 uppercase">Winrate</p><p id="win-rate" class="text-lg font-black text-blue-400">0%</p></div>
+                <div class="card p-4 text-center"><p class="text-[10px] text-slate-400 uppercase">Trades</p><p id="trade-count" class="text-lg font-black">0</p></div>
+            </div>
+
+            <div class="card">
+                <canvas id="tradingChart" style="max-height: 200px;"></canvas>
+            </div>
+        </div>
+
+        <div id="section-journal" class="hidden">
+            <h1 class="text-2xl font-bold mb-6">Mon Historique</h1>
+            <div id="journal-list" class="space-y-3">
+                </div>
+        </div>
+    </div>
+
+    <div id="modal" class="fixed inset-0 hidden flex items-center justify-center bg-black/90 backdrop-blur-sm z-50 p-4">
+        <div class="bg-slate-800 w-full max-w-sm rounded-3xl p-6 border border-slate-700">
+            <h2 class="text-xl font-bold mb-6 text-center">Enregistrer le résultat</h2>
+            <form id="trade-form" class="space-y-4">
+                <div class="grid grid-cols-2 gap-2">
+                    <button type="button" onclick="setType('BUY')" id="btn-buy" class="p-3 rounded-xl bg-slate-700 font-black border-2 border-transparent">BUY</button>
+                    <button type="button" onclick="setType('SELL')" id="btn-sell" class="p-3 rounded-xl bg-slate-700 font-black border-2 border-transparent">SELL</button>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <button type="button" onclick="setResult('WIN')" id="btn-win" class="p-3 rounded-xl bg-slate-700 font-black border-2 border-transparent">WIN ✅</button>
+                    <button type="button" onclick="setResult('LOSS')" id="btn-loss" class="p-3 rounded-xl bg-slate-700 font-black border-2 border-transparent">LOSS ❌</button>
+                </div>
+                <input type="number" id="amount" placeholder="Montant en $ (ex: 200)" class="input-field text-center text-xl font-bold" required>
+                <div class="flex gap-2 mt-4">
+                    <button type="submit" class="flex-1 bg-blue-600 p-4 rounded-xl font-black uppercase">Valider</button>
+                    <button type="button" onclick="toggleModal(false)" class="flex-1 bg-slate-700 p-4 rounded-xl font-bold">Annuler</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        let trades = JSON.parse(localStorage.getItem('nasTrades')) || [];
+        let selectedType = 'BUY';
+        let selectedResult = 'WIN';
+
+        function calcLot() {
+            const risk = document.getElementById('calc-risk').value;
+            const sl = document.getElementById('calc-sl').value;
+            const res = (risk > 0 && sl > 0) ? (risk / sl).toFixed(2) : "0.00";
+            document.getElementById('res-lot').innerText = res;
+        }
+
+        function showSection(name) {
+            document.getElementById('section-dashboard').classList.toggle('hidden', name !== 'dashboard');
+            document.getElementById('section-journal').classList.toggle('hidden', name !== 'journal');
+        }
+
+        function toggleModal(show) { document.getElementById('modal').classList.toggle('hidden', !show); }
+
+        function setType(t) { 
+            selectedType = t; 
+            document.getElementById('btn-buy').style.borderColor = t === 'BUY' ? '#3b82f6' : 'transparent';
+            document.getElementById('btn-sell').style.borderColor = t === 'SELL' ? '#3b82f6' : 'transparent';
+        }
+
+        function setResult(r) { 
+            selectedResult = r; 
+            document.getElementById('btn-win').style.borderColor = r === 'WIN' ? '#22c55e' : 'transparent';
+            document.getElementById('btn-loss').style.borderColor = r === 'LOSS' ? '#ef4444' : 'transparent';
+        }
+
+        document.getElementById('trade-form').onsubmit = function(e) {
+            e.preventDefault();
+            const val = parseFloat(document.getElementById('amount').value);
+            trades.push({
+                id: Date.now(),
+                type: selectedType,
+                result: selectedResult,
+                amount: selectedResult === 'WIN' ? val : -val,
+                date: new Date().toLocaleDateString('fr-FR')
+            });
+            saveAndRender();
+            toggleModal(false);
+            this.reset();
+        };
+
+        function saveAndRender() {
+            localStorage.setItem('nasTrades', JSON.stringify(trades));
+            render();
+        }
+
+        function render() {
+            const total = trades.reduce((sum, t) => sum + t.amount, 0);
+            const wins = trades.filter(t => t.result === 'WIN').length;
+            const rate = trades.length > 0 ? Math.round((wins / trades.length) * 100) : 0;
+
+            document.getElementById('total-profit').innerText = `$${total.toFixed(2)}`;
+            document.getElementById('total-profit').className = `text-lg font-black ${total >= 0 ? 'text-green-400' : 'text-red-400'}`;
+            document.getElementById('win-rate').innerText = `${rate}%`;
+            document.getElementById('trade-count').innerText = trades.length;
+
+            document.getElementById('journal-list').innerHTML = trades.slice().reverse().map(t => `
+                <div class="card flex justify-between items-center border-l-4 ${t.amount >= 0 ? 'border-l-green-500' : 'border-l-red-500'}">
+                    <div>
+                        <p class="font-black text-sm">${t.type} - NAS100</p>
+                        <p class="text-[10px] text-slate-400">${t.date}</p>
+                    </div>
+                    <div class="text-right">
+                        <p class="font-black ${t.amount >= 0 ? 'text-green-400' : 'text-red-400'}">${t.amount >= 0 ? '+' : ''}${t.amount.toFixed(2)}</p>
+                        <button onclick="deleteTrade(${t.id})" class="text-[10px] text-slate-500 uppercase font-bold">Supprimer</button>
+                    </div>
+                </div>
+            `).join('');
+            updateChart();
+        }
+
+        let chart;
+        function updateChart() {
+            const ctx = document.getElementById('tradingChart').getContext('2d');
+            if (chart) chart.destroy();
+            let sum = 0;
+            chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: trades.map((_, i) => i + 1),
+                    datasets: [{ data: trades.map(t => sum += t.amount), borderColor: '#3b82f6', tension: 0.3, fill: true, backgroundColor: 'rgba(59, 130, 246, 0.1)' }]
+                },
+                options: { plugins: { legend: { display: false } }, scales: { y: { grid: { color: '#334155' } }, x: { display: false } } }
+            });
+        }
+
+        function deleteTrade(id) { if(confirm('Supprimer ?')) { trades = trades.filter(t => t.id !== id); saveAndRender(); } }
+        function clearData() { if(confirm('Tout effacer ?')) { trades = []; saveAndRender(); } }
+        
+        setType('BUY'); setResult('WIN'); render();
+    </script>
+</body>
+</html>
